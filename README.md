@@ -2,6 +2,8 @@
 
 ## Validé 
 
+- Ajout des fichiers graph_structure.ml et instances_to_graph.ml (25/11)
+
 ### DSATUR
 - Le code de l'algorithme DSATUR a été rajouté (18/11) 
 
