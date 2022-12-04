@@ -107,40 +107,66 @@ module Graph = struct
 
   let rec backtrack = fun graphModif graphOrigine keys-> 
     if not(keys = []) then
-      begin 
-        Hashtbl.replace graphModif (List.hd keys) (Hashtbl.find graphOrigine (List.hd keys));
+      begin
+        let head = List.hd keys in
+        let head_char = Hashtbl.find graphOrigine head in 
+        Hashtbl.replace graphModif head head_char;
+        List.iter (fun id -> change_dsat graphModif id) head_char.adj;
         backtrack graphModif graphOrigine (List.tl keys)
       end
   
+  let chosen_vertex = fun graph -> 
+    (*la liste des sommets*)
+    let nodes_list = Hashtbl.fold (fun id _ -> List.cons id) graph [] in
+    let rec aux_chosen_vertex = fun l ->
+      match l with 
+        [] -> raise (Empty_list "List vide")
+      |id :: t -> if is_colored graph id then aux_chosen_vertex t else id in 
+    aux_chosen_vertex nodes_list
+ 
   (* Fonction principale d'algo DSATUR Branch and Bound (Backtrack)*) 
   let dsatureBnB = fun graph ->
-    let uB = Hashtbl.length graph in 
-    let rec aux = fun graph k visited ->
-      if not (is_all_colored graph) then 
+    (*Juste pour tester, à changer par dsatur *)
+    let lB = 3 in 
+    let rec aux = fun graph colors visited uB->
+      if lB >= uB then raise (Empty_graph "Graphe vide")
+      else if not (is_all_colored graph) then 
         begin
+          (*Enregistrer une copie du graphe avant modification*)
           let graph2 = Hashtbl.copy graph in 
-          let nodes_list = Hashtbl.fold (fun id _ -> List.cons id) graph [] in
-                (* séléctionner un noued non coloré*) 
-          let rec chosen_vertex = fun l -> 
-            match l with 
-              [] -> raise (Empty_list "List vide")
-            |id :: t -> if is_colored graph id then chosen_vertex t else id in 
-          let id_chosen_vertex = chosen_vertex nodes_list in
-          let rec loop = fun i ->
-                    (*loop in colors dispo  (for loop de i= 1 jusqu'à k+1)*)
-            let color = List.hd (available_colors i (k+1)) in
-                    (*tester si color est une couleur possible et colorer le noued avec color*)
+          (* séléctionner un noued non coloré*)
+          let id_chosen_vertex = chosen_vertex graph in
+          let k = if colors=[] then 1 else List.length colors in
+          (*loop in colors dispo de 1 jusqu'à k+1*)
+          for color = 1 to k do
+            (*tester si color est une couleur possible et colorer le noued avec color*)
             if test_color graph id_chosen_vertex color then 
               begin
                 change_color graph id_chosen_vertex color;
                 id_chosen_vertex :: visited;
-                aux graph (k+1) visited;
+                aux graph (color :: colors) visited uB;
                 backtrack graph graph2 visited;
-                loop i+1; 
               end
-            else loop i+1 
-          in loop 1;
+          done
         end
-      else if k < uB then k else uB
-    in aux graph 0 []
+      else if (is_all_colored graph) then 
+        begin
+          print_string "\n";
+          print_graph  graph
+        end
+    in aux graph [] [] (Hashtbl.length graph)
 end
+
+
+
+let () =
+
+  let graph = Graph.create 5 in 
+  
+  Graph.add graph 1 {adj = [2 ; 3 ; 5] ; color = 0 ; degree = 3 ; dsat = 0};
+  Graph.add graph 2 {adj = [1 ; 3] ; color = 0 ; degree = 2 ; dsat = 0};
+  Graph.add graph 3 {adj = [1 ; 2 ; 4] ; color = 0 ; degree = 3 ; dsat = 0};
+  Graph.add graph 4 {adj = [3 ; 5] ; color = 0 ; degree = 2 ; dsat = 0};
+  Graph.add graph 5 {adj = [4 ; 1] ; color = 0 ; degree = 2 ; dsat = 0};
+
+  Graph.dsatureBnB graph
