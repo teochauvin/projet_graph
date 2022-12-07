@@ -129,16 +129,20 @@ module Graph = struct
     (*Juste pour tester, à changer par dsatur *)
     let lB = 3 in 
     let rec aux = fun graph colors visited uB->
-      if lB >= uB then raise (Empty_graph "Graphe vide")
+      if lB >= uB then 
+        begin
+          print_string "\n";
+          print_graph  graph
+        end
       else if not (is_all_colored graph) then 
         begin
           (*Enregistrer une copie du graphe avant modification*)
           let graph2 = Hashtbl.copy graph in 
           (* séléctionner un noued non coloré*)
           let id_chosen_vertex = chosen_vertex graph in
-          let k = if colors=[] then 1 else List.length colors in
+          let k = if colors=[] then 1 else List.length (compress colors) in
           (*loop in colors dispo de 1 jusqu'à k+1*)
-          for color = 1 to k do
+          for color = 1 to (k+1) do
             (*tester si color est une couleur possible et colorer le noued avec color*)
             if test_color graph id_chosen_vertex color then 
               begin
@@ -149,11 +153,9 @@ module Graph = struct
               end
           done
         end
-      else if (is_all_colored graph) then 
-        begin
-          print_string "\n";
-          print_graph  graph
-        end
+      else if (is_all_colored graph) && List.length (compress colors) <uB then 
+        (*changer la vaeur de uB a k*)
+        aux graph colors visited (List.length (compress colors));
     in aux graph [] [] (Hashtbl.length graph)
 end
 
