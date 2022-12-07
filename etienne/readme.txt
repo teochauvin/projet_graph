@@ -1,4 +1,11 @@
-Mise à jour du 19/11/22:
+### Mise à jour du 07/12/22:
+
+- fichier graph_structure.ml
+- instances_utils.ml
+- main.ml
+- compile.sh (commandes de compilations des trois fichier ci-dessus, à exécuter avec : source compile.sh ou votre commande pref)
+
+### Mise à jour du 19/11/22:
 
 Concernant le fichier graph_structure.ml :
 
