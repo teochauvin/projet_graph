@@ -1,3 +1,7 @@
+## Ajout du 22/12/22:
+
+- run.sh (succincte application bash pour faciliter l'utilsation des fichiers convert et color)
+
 ## Mise à jour du 07/12/22:
 
 - fichier graph_structure.ml
