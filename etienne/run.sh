@@ -60,7 +60,7 @@ case $option in
 
     colored_filename="$filename.$method"
     # Execute the main script
-    ./color $filename $colored_filename $method
+    time ./color $filename $colored_filename $method
     ;;
   3)
     # Quit the app
