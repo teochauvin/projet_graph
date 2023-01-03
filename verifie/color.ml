@@ -17,15 +17,15 @@ let () =
   let coloring_method = Sys.argv.(3) in 
 
   (* On charge le graphe vierge en mémoire *)
-  
-  (* Ca ca fonctionne uniquement si on ne cherche pas à colorier derrière *)
   let intersection_graph = Util.load_graph graphe_intersection_path in  
-  let colored = (Graph.dsaturbnb intersection_graph) in
 
-  Graph.show_coloration colored
+  let colored = 
+    if coloring_method = "dsatur" then
+      Graph.dsatur intersection_graph
+    else if coloring_method = "dsaturbnb" then
+      Graph.dsaturbnb intersection_graph
+    else
+      exit 1 in 
 
-
-
-  
-
-
+  Graph.show_coloration colored;
+  Util.save_graph colored_graph_path colored
