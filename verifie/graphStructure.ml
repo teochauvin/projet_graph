@@ -8,10 +8,7 @@
 (*                                                                                               *)
 (* ============================================================================================= *)
 
-
-
-
-
+module Heap = Color_heap.Heap
 
 
 (* Signature du module Hashtbl*)
@@ -166,6 +163,7 @@ module Make=functor (Dom: Hash)-> struct
     | None -> default_value
 
   (* Elimine les doublons d'une liste quelconque d'entier *)
+  (* l taille de la liste alors O(l log l) *)
   let compress = fun l -> 
     let sorted_l = List.sort (fun color1 color2 -> color1 - color2) l in 
 
@@ -222,7 +220,7 @@ module Make=functor (Dom: Hash)-> struct
     Printf.printf("\n\n\n")
 
   let show_coloration = fun graph ->
-    Dom.iter (fun id characteristics -> Printf.printf "\nid : %d, color %d" id characteristics.color) graph
+    Dom.iter (fun id characteristics -> Printf.printf "id : %d, color %d \n" id characteristics.color) graph
 
   (* Représente la liste de segments sous format texte console *)
   let print_list_segment = fun list_seg -> 
@@ -269,6 +267,7 @@ module Make=functor (Dom: Hash)-> struct
     aux adj []
 
   (* Met à jour le degré de saturation d'un noeud *) 
+  (* O(1) *)
   let update_vertex_dsat = fun graph id ->
 
     let node_char = find graph id in 
@@ -277,21 +276,42 @@ module Make=functor (Dom: Hash)-> struct
     let new_node_char = {adj = node_char.adj ; color = node_char.color ; degree = node_char.degree ; dsat = new_dsat} in 
     Dom.replace graph id new_node_char
   
-  (* Colorie un noeud *) 
-  (* Met à jour les degrés de saturations *) 
+  (* Colorie un noeud et actualise les adjacents *) 
+  (* O(k) k<<n *)
   let color_vertex = fun graph id new_color ->
 
     let node_char = find graph id in 
     let new_node_char = {adj = node_char.adj ; color = new_color ; degree = node_char.degree ; dsat = node_char.dsat} in 
 
+    (* Coloration dans la Hashtbl*)
     Dom.replace graph id new_node_char;
+
+    (* Modifie les degré de saturation des adjacents dans la hashtabl *)
     List.iter (fun id -> update_vertex_dsat graph id) new_node_char.adj
 
+  (* Renvoie la liste [(id_adj, dsat_adj) ; ...] d'un noeud *)
+  let get_adj_tuple = fun graph id -> 
+    let node_char = find graph id in 
+    
+    let rec aux = fun l acc -> 
+      match l with
+        [] -> acc 
+      | h :: t ->
+          begin 
+            let h_char = find graph h in 
+            aux t ((h, h_char.dsat) :: acc)
+          end in 
+
+    aux node_char.adj []
+  
   (* Trouve la couleur la plus petite disponible sur un noeud *) 
+  (* O(k log k) *)
+
   let lowest_coloration = fun graph id ->
 
     let node_char = find graph id in 
     let adjs_colors = List.map (fun id -> get_vertex_color graph id) node_char.adj in 
+
     let csorted_adjs_colors = pop_cond (List.sort (fun color1 color2 -> color1 - color2) (compress adjs_colors)) (fun x -> x = 0) in
 
     let rec aux = fun l av_color -> 
@@ -299,9 +319,10 @@ module Make=functor (Dom: Hash)-> struct
         [] -> av_color 
       | color :: t -> if color = av_color then aux t (av_color + 1) else av_color in 
 
-    aux csorted_adjs_colors 1
+    aux csorted_adjs_colors 1 
 
   (* Teste si le graphe est entièrement coloré *) 
+  (* Tres inefficace et en pratique non utilisé car O(n) *)
   let is_fully_colored = fun graph ->
     let nodes_list = Dom.fold (fun id _ -> List.cons id) graph [] in
     
@@ -313,6 +334,7 @@ module Make=functor (Dom: Hash)-> struct
     aux nodes_list
 
   (* tester si une coloration est possible *)
+  (* O(?) *)
   let is_valid_coloration = fun graph id couleur -> 
 
     let node_char = find graph id in 
@@ -343,6 +365,36 @@ module Make=functor (Dom: Hash)-> struct
     let l = Dom.fold (fun id characteristics -> List.cons characteristics.dsat) graph [] in
     (List.fold_left (fun x y -> max x y) 0 l) + 1
 
+  (* Trouve la première clique *)
+  let find_clique = fun graph coloration_order -> 
+
+    (* intersection d'id *)
+    let intersect = fun l1 l2 -> 
+      let l = List.sort (fun a b -> a-b) (List.append l1 l2) in 
+      
+      let rec aux = fun acc l -> 
+        match l with 
+        |[] | _::[]-> acc 
+        |a :: (b :: _ as t) -> if a = b then aux (a::acc) t else aux acc t in 
+      aux [] l in 
+
+    let rec find_rec = fun l_id acc -> 
+
+      match l_id with 
+      | [] -> acc 
+      | hd::tl -> 
+        begin
+          let adj = (find graph hd).adj in 
+          let intersection = intersect adj acc in  
+
+          if List.mem hd intersection then find_rec tl intersection else acc 
+        end in
+    
+    match coloration_order with 
+    | [] -> raise Error 
+    | head::liste_id -> find_rec liste_id (find graph head).adj
+
+
 
 
 
@@ -371,7 +423,7 @@ module Make=functor (Dom: Hash)-> struct
       | (_, _) -> raise Error in 
       
     (* On retourne les arêtes *)
-    aux graph_inst.edge_i graph_inst.edge_j [] 1 
+    aux graph_inst.edge_i graph_inst.edge_j [] 0 
   
   (* Fonction ClockWise utile pour le calcul d'intersections *)
   let ccw = fun (x1,y1) (x2,y2) (x3,y3) -> 
@@ -416,7 +468,7 @@ module Make=functor (Dom: Hash)-> struct
     (* On récupère l'iD d'un segment *)
     let id = s.id_s in 
   
-    (* On accumule les voisins de ce semgent *)
+    (* On accumule les voisins de ce segment *)
     let rec aux = fun l acc -> 
       match l with 
       | [] -> acc
@@ -462,59 +514,88 @@ module Make=functor (Dom: Hash)-> struct
   (* ============================================================================================= *)
 
   (* Fonction principale qui execute l'algo DSATUR *) 
-  (* Complexite O(n^2) *)
+  (* *)
   let dsatur = fun graph ->
 
-    (* Récupère les (id, degrés, degré de staturaiton) de chaque noeud du graph *) 
-    let vertex_list= Dom.fold (fun id _ -> 
-      let node_char = find graph id in List.cons (id, node_char.degree, node_char.dsat)) graph [] in
+    (* Récupère l'id du noeud de degré maximal *)
+    (* O(n) *)
+    let (max_deg, id_deg_max) = Dom.fold (fun id node_char (max_v, max_i) -> 
+      if node_char.degree > max_v then (node_char.degree, id) else (max_v, max_i)) graph (min_int, 0) in 
+
+    (* Colore le noeud de degré maximal avec 1 *) 
+    (* O(k) k<<n *)
+    color_vertex graph id_deg_max 1 ;
+
+    (* Récupère les (degré de saturation, degré) de chaque noeud du graph *)     
+    let n = Dom.length graph in 
+
+    (* O(n) *)
+    let rec build_vertex_list = fun n vertex_list -> 
+      if n < 0 then vertex_list 
     
-    (* Trie la liste des noeuds par degrés décroissants *)
-    let sorted_vertex_degree = List.sort (fun (id1, degree1, _) (id2, degree2, _) -> degree2-degree1) vertex_list in 
-    
-    (* Colorer le noeud de degré maximal (premier élément de la liste) avec 1 *) 
-    match sorted_vertex_degree with 
-      [] -> raise (Empty_graph "Graphe vide")
-    | (id, _, _) :: _ -> color_vertex graph id 1 ;
+      else 
+        begin 
+          let node_char = find graph n in 
+          build_vertex_list (n - 1) ((node_char.dsat, node_char.degree) :: vertex_list)
+        end in 
+
+    let vertex_list = build_vertex_list (n - 1) [] in 
+
+    (* Crée un heap vide dont la fonction de comparaison selon trie en fonction du dsat décroissant et selon le degré en cas d'égalité *)
+    let (hs : Heap.heap_struct) = {
+      heap=Array.make (n+1) (-1, -1, -1); 
+      assoc=Array.make (n) (-1); 
+      size= ref 1
+    } in 
+      
+    (* Fonction de comparaison pour trier le tas *)
+    let comp = fun (id1, dsat1, d1) (id2, dsat2, d2) -> 
+      if dsat2-dsat1=0 then d1-d2 > 0 else dsat1-dsat2 >= 0 in 
+
+    (* initialisation du tas *)
+    (* O(n) *)
+    Heap.init hs vertex_list comp;
 
     (* Boucle while(graphe pas coloré entièrement) *) 
-    let rec dsatur_recursive = fun () -> 
+    let rec dsatur_recursive = fun acc i -> 
 
-      (* Vérifier si le graph est entièrement colorié *)
-      if is_fully_colored graph then 
-        Some graph 
+      (* Vérifie si le graph est entièrement colorié *)
+      (* O(log2 n) *)
+      if Heap.is_empty hs then 
+        Some (graph, List.rev acc) 
 
       (* Sinon on continue le processus de coloriage *)
       else 
-        begin 
+        begin
 
-          let vertex_list= Dom.fold (fun id _ -> 
-            let node_char = find graph id in List.cons (id, node_char.degree, node_char.dsat)) graph [] in
-          
-          (* Trie la liste des noeuds par degré de saturation décroissant et en cas d'égalité par degré décroissant *)
-          let sorted_vertex_dsat = List.sort (
-            fun (id1, degree1, dsat1) (id2, degree2, dsat2) -> if dsat2-dsat1 = 0 then degree2-degree1 else dsat2-dsat1) vertex_list in 
-          
-          (* Renvoyer le premier noeud de la liste qui n'est pas encore colorié *) 
-          let rec first_uncolored_vertex = fun l -> 
-            match l with 
-            | [] -> raise (Empty_list "List vide")
-            | (id, _, _) :: t -> if is_colored graph id then first_uncolored_vertex t else id in 
-          
-          (* On récupère le premier noeud non colorié dans la liste *)
-          let uncolored_vertex = first_uncolored_vertex sorted_vertex_dsat in
-          
+          (* debug *) 
+          if i mod 10 = 0 then 
+            Printf.printf "%d " i; 
+            flush_all (); 
+
+          (* On récupère le noeud non colorié de degré de saturation maximal et / ou de degré maximal *)
+          (* O(1) *)
+          let chosen_vertex = Heap.pop hs comp in
+
           (* Colorier ce noeud avec la couleur la plus petite possible *) 
-          color_vertex graph uncolored_vertex (lowest_coloration graph uncolored_vertex);
+          (* O(k log k) *)
+          color_vertex graph chosen_vertex (lowest_coloration graph chosen_vertex);
+          
+          (* Mise à jour du tas *)
+          (* O(k) *)
+          let adj_tuple = get_adj_tuple graph chosen_vertex in 
+
+          (* O(k log 2 p) *)
+          List.iter (fun (id, dsat) -> Heap.update hs id dsat comp) adj_tuple;
 
           (* On réitère le procédé *)
-          dsatur_recursive () 
+          dsatur_recursive (chosen_vertex::acc) (i+1)
         
         end 
       in
     
     (* Récupère la valeur sans option, dans le cas erreur on renvoie le graph initial *)
-    get_value_from_option (dsatur_recursive ()) graph 
+    get_value_from_option (dsatur_recursive [] 1) (graph, []) 
 
 
   (* Fonction principale qui exectute l'algo DSATUR BRANCH AND BOUND *)
@@ -522,22 +603,26 @@ module Make=functor (Dom: Hash)-> struct
   let dsaturbnb = fun graph ->
 
     (* Calcule de la borne inferieure *)
-    let lb = chromatic_number (dsatur (Dom.copy graph)) in 
+    let (colored_graph, coloration_order) = dsatur (Dom.copy graph) in 
+    let lb = List.length (find_clique graph coloration_order) in 
 
     (* Initialisation de la borne supérieure *)
-    let ub = length graph in 
+    let ub = chromatic_number (colored_graph) in 
 
-    (* FOnction dsatur recursive *)
-    let rec dsatur_recursive = fun g lb ub -> 
+    (* Nombre de noeuds *)
+    let n = Dom.length graph in 
 
-      (* Si le graph est entièrement colorié *)
-      if is_fully_colored g then Some g
+    (* Fonction dsatur recursive *)
+    let rec dsatur_recursive = fun g lb ub operations -> 
+
+      (* Si le graph est entièrement colorié (n operations de coloration) *)
+      if List.length operations = n then Some g
       
       (* Sinon on continue à le colorier *)
       else
         begin 
           (* Fonction recursive qui teste la coloration d'un noeud v par une couleur c *)
-          let rec try_colors = fun g v c -> 
+          let rec try_colors = fun g v c op -> 
 
             (* On autorise que les couleurs connues et une nouvelle couleur *)
             if c > (ub+1) then 
@@ -549,32 +634,39 @@ module Make=functor (Dom: Hash)-> struct
                 
                 (* Si la coloration est valide dans le graph *)
                 if is_valid_coloration g v c then 
+                  begin
 
-                  (* On fait une copie du graph *)
-                  let graph_copy = Dom.copy g in 
+                    (* On effectue la coloration sur la copie*)
+                    color_vertex g v c; 
 
-                  (* On effectue la coloration sur la copie*)
-                  color_vertex graph_copy v c; 
+                    (* on rajoute l'operation effectuee *) 
+                    let operation = (v,c) in 
 
-                  (* On calcule la nouvelle borne superieure *)
-                  let new_ub = max lb (max ub c) in
+                    (* On calcule la nouvelle borne superieure *)
+                    let new_ub = max lb (max ub c) in
 
-                  (* Si la nouvelle borne supérieure passe en dessous de la borne inférieure *)
-                  if (lb <= new_ub) then 
-                    begin 
+                    (* Si la nouvelle borne supérieure passe en dessous de la borne inférieure *)
+                    if (lb <= new_ub) then 
+                      begin 
 
-                      (* On applique la fonction dsatur, son resultat est soit renvoyé car c'est une coloration valide soit on change la coloration *)
-                      match dsatur_recursive graph_copy lb new_ub with 
-                        |Some result -> Some result 
-                        |None -> try_colors g v (c + 1)
+                        (* On applique la fonction dsatur, son resultat est soit renvoyé car c'est une coloration valide soit on change la coloration *)
+                        match dsatur_recursive g lb new_ub (operation::op) with 
+                          |Some result -> Some result 
+                          |None -> 
+                            begin 
+                              color_vertex g v 0; 
+                              try_colors g v (c + 1) op 
+                            end
 
-                    end
-                  (* Si on est encore au dessus de la borne inférieure on change la coloration *)
-                  else
-                    try_colors g v (c + 1)
+                      end
+                    (* Si on est encore au dessus de la borne inférieure on change la coloration *)
+                    else
+                      try_colors g v (c + 1) op 
+
+                  end
 
                 else
-                  try_colors g v (c+1) 
+                  try_colors g v (c+1) op 
 
               end 
             in
@@ -586,7 +678,7 @@ module Make=functor (Dom: Hash)-> struct
             match vertices with 
               | [] -> None 
               | v :: vertices_tl -> 
-                match (try_colors g v 1) with 
+                match (try_colors g v 1 operations) with 
                   |Some result -> Some result 
                   |None -> try_vertices g vertices_tl 
               
@@ -602,10 +694,9 @@ module Make=functor (Dom: Hash)-> struct
       in 
 
     (* Récupère la valeur sans option, dans le cas erreur on renvoie le graph initial *)
-    get_value_from_option (dsatur_recursive graph lb ub) graph
+    get_value_from_option (dsatur_recursive graph lb ub []) graph
 
 end
 
 (* On génére notre module à l'aide du foncteur *)
 module Graph=Make(Hashtbl)
-

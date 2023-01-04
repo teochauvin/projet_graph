@@ -19,13 +19,19 @@ let () =
   (* On charge le graphe vierge en mémoire *)
   let intersection_graph = Util.load_graph graphe_intersection_path in  
 
-  let colored = 
-    if coloring_method = "dsatur" then
-      Graph.dsatur intersection_graph
-    else if coloring_method = "dsaturbnb" then
-      Graph.dsaturbnb intersection_graph
-    else
-      exit 1 in 
+  match coloring_method with 
+  | "dsatur" -> 
+    begin 
+      let (colored, _) = Graph.dsatur intersection_graph in 
+      Graph.show_coloration colored;
+      Util.save_graph colored_graph_path colored
+    end 
+  | "dsaturbnb" -> 
+    begin
+      let colored = Graph.dsaturbnb intersection_graph in 
+      Graph.show_coloration colored;
+      Util.save_graph colored_graph_path colored
+    end 
+  |_ -> exit 1
 
-  Graph.show_coloration colored;
-  Util.save_graph colored_graph_path colored
+
