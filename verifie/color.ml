@@ -23,13 +23,11 @@ let () =
   | "dsatur" -> 
     begin 
       let (colored, _) = Graph.dsatur intersection_graph in 
-      Graph.show_coloration colored;
       Util.save_graph colored_graph_path colored
     end 
   | "dsaturbnb" -> 
     begin
-      let colored = Graph.dsaturbnb intersection_graph in 
-      Graph.show_coloration colored;
+      let (colored, _) = Graph.dsaturbnb intersection_graph in 
       Util.save_graph colored_graph_path colored
     end 
   |_ -> exit 1

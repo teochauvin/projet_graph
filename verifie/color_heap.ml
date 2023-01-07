@@ -3,7 +3,7 @@ module Heap = struct
   type heap_struct = {
     heap: (int*int*int) array; 
     assoc: int array; 
-    mutable size: int ref 
+    mutable active_size: int ref 
   }
 
   (* permutation de deux élements *)
@@ -29,19 +29,20 @@ module Heap = struct
   let up = fun heap_struct x comp -> 
 
     (* nombre d'éléments du tas *)
-    let n = !(heap_struct.size) in 
-    heap_struct.heap.(n) <- x;
+    let len = !(heap_struct.active_size)-1 in 
+    heap_struct.heap.(len+1) <- x;
 
     let rec aux = fun i -> 
 
-      if i=1 then () 
+      if i=0 then () 
       else 
 
-        let index_pere = i/2 in 
+        let index_pere = (i-1)/2 in 
 
         let current = heap_struct.heap.(i) in 
         let pere = heap_struct.heap.(index_pere) in 
-        
+
+
         (* Si le noeud > pere au sens de la comparaison *)
         if comp current pere then 
           begin
@@ -52,45 +53,44 @@ module Heap = struct
         else () 
 
       in 
-    aux n
+    aux (len+1)
   
-  let down = fun heap_struct x comp ->
+  let down = fun heap_struct comp ->
 
-    let n = !(heap_struct.size) in 
-    heap_struct.heap.(1) <- x;
+    let len = !(heap_struct.active_size)-1 in 
   
     let rec aux = fun i -> 
 
-      if 2*i+1 <= n - 1 then 
+      if 2*i+2 <= len then 
         begin
           let current = heap_struct.heap.(i) in 
-          let left = heap_struct.heap.(2*i) in 
-          let right = heap_struct.heap.(2*i+1) in
+          let left = heap_struct.heap.(2*i+1) in 
+          let right = heap_struct.heap.(2*i+2) in
 
           (* On peut progresser vers la gauche et la droite est non vide *)
           if comp left current then begin
-            permut heap_struct i (2*i);
-            aux (2*i);
+            permut heap_struct i (2*i+1);
+            aux (2*i+1);
           end
 
           (* On peut progresser vers la droite et la gauche est non vide *)
           else if comp right current then begin
-            permut heap_struct i (2*i+1);
-            aux (2*i+1);
+            permut heap_struct i (2*i+2);
+            aux (2*i+2);
           end
         end 
       
-      else if 2*i = n - 1 then 
+      else if 2*i+1 = len then 
         begin 
           let current = heap_struct.heap.(i) in 
-          let left = heap_struct.heap.(2*i) in 
-          if comp left current then permut heap_struct i (2*i);
+          let left = heap_struct.heap.(2*i+1) in 
+          if comp left current then permut heap_struct i (2*i+1);
         end
 
       (* L'élement ne peut ni progresser à droite ni à gauche alors il est à sa place *)
       else ()
       
-    in aux 1  
+    in aux 0  
 
 
   (* Initialise un heap avec une liste de valeurs *)
@@ -100,12 +100,15 @@ module Heap = struct
       match v with 
       | [] -> ()
       | (dsat, d)::tl -> 
-        (* On ajoute une association ID:position_heap *)
-        heap_struct.assoc.(k) <- !(heap_struct.size); 
 
-        (* On ajoute un élement au heap *)
+        (* On ajoute une association ID:position_heap *)
+        heap_struct.assoc.(k) <- k; 
+        
+        (* On ajoute au heap *)
         up heap_struct (k,dsat,d) comp;
-        heap_struct.size := !(heap_struct.size)+1;
+
+        (* La taille active du heap augmente (nombre d'élement actifs) *)
+        heap_struct.active_size := !(heap_struct.active_size) + 1; 
         
         (* On itère sur les élements suivants *)
         aux tl (k+1) in 
@@ -115,12 +118,16 @@ module Heap = struct
   (* Retourne le max et réorganise le heap *)
   let pop = fun heap_struct comp -> 
     
-    let (id, _, _) = heap_struct.heap.(1) in 
-    let tl = !(heap_struct.size)-1 in 
+    let (id, _, _) = heap_struct.heap.(0) in 
+
+    (* permutte les elements *)
+    permut heap_struct 0 (!(heap_struct.active_size)-1); 
+
+    (* On diminue la taille active *) 
+    heap_struct.active_size := !(heap_struct.active_size) - 1; 
 
     (* on reforme le heap avec un element en moins*)
-    down heap_struct heap_struct.heap.(tl) comp; 
-    heap_struct.size := tl; 
+    down heap_struct comp; 
 
     (* On pop, id - 1 pour palier au décalge d'indice dans le tas *)
     id
@@ -130,21 +137,14 @@ module Heap = struct
     Printf.printf "\nHEAP \n"; 
     Array.iter (fun (a,b,c) -> Printf.printf "%d : %d, %d\n" a b c) heap_struct.heap; 
     Printf.printf "\nASSOC \n"; 
-    Array.iter (Printf.printf "%d") heap_struct.assoc; 
-    Printf.printf "\n\nSIZE : %d \n" !(heap_struct.size)
-
-  let get_value = fun heap_struct id -> 
-
-    let position = heap_struct.assoc.(id) in 
-    let (id_found, dsat, d) = heap_struct.heap.(position) in 
-    (dsat, d) 
+    Array.iter (Printf.printf "%d") heap_struct.assoc 
 
   let update = fun heap_struct id new_dsat comp -> 
 
     (* on récupère les éléments d'information *)
     let position = heap_struct.assoc.(id) in 
     let (id, dsat, d) = heap_struct.heap.(position) in 
-    let n = !(heap_struct.size) in 
+    let len = !(heap_struct.active_size)-1 in 
 
     (* Modifier la valeur *) 
     heap_struct.heap.(position) <- (id, new_dsat, d); 
@@ -152,30 +152,30 @@ module Heap = struct
     (* Fonction recursive down *)
     let rec down = fun i -> 
 
-      if 2*i+1 <= n - 1 then 
+      if 2*i+2 <= len then 
         begin
           let current = heap_struct.heap.(i) in 
-          let left = heap_struct.heap.(2*i) in 
-          let right = heap_struct.heap.(2*i+1) in
+          let left = heap_struct.heap.(2*i+1) in 
+          let right = heap_struct.heap.(2*i+2) in
 
           (* On peut progresser vers la gauche et la droite est non vide *)
           if comp left current then begin
-            permut heap_struct i (2*i);
-            down (2*i);
+            permut heap_struct i (2*i+1);
+            down (2*i+1);
           end
 
           (* On peut progresser vers la droite et la gauche est non vide *)
           else if comp right current then begin
-            permut heap_struct i (2*i+1);
-            down (2*i+1);
+            permut heap_struct i (2*i+2);
+            down (2*i+2);
           end
         end 
       
-      else if 2*i = n - 1 then 
+      else if 2*i+1 = len then 
         begin 
           let current = heap_struct.heap.(i) in 
-          let left = heap_struct.heap.(2*i) in 
-          if comp left current then permut heap_struct i (2*i);
+          let left = heap_struct.heap.(2*i+1) in 
+          if comp left current then permut heap_struct i (2*i+1);
         end
 
       (* L'élement ne peut ni progresser à droite ni à gauche alors il est à sa place *)
@@ -184,10 +184,10 @@ module Heap = struct
     (* fonction recursive up *)
     let rec up = fun i -> 
 
-      if i=1 then () 
+      if i=0 then () 
       else 
 
-        let index_pere = i/2 in 
+        let index_pere = (i-1)/2 in 
 
         let current = heap_struct.heap.(i) in 
         let pere = heap_struct.heap.(index_pere) in 
@@ -206,6 +206,7 @@ module Heap = struct
     else () 
 
   let is_empty = fun heap_struct -> 
-    !(heap_struct.size) = 1
+    !(heap_struct.active_size) = 0
+
     
 end 
